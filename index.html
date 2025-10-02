@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BroFiles Timeline Viewer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+        }
+
+        .header {
+            background: white;
+            padding: 20px 30px;
+            border-bottom: 2px solid #e0e0e0;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            font-size: 1.8em;
+            margin-bottom: 5px;
+        }
+
+        .header-subtitle {
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        .controls {
+            background: white;
+            padding: 20px 30px;
+            border-bottom: 1px solid #e0e0e0;
+            position: sticky;
+            top: 80px;
+            z-index: 99;
+            transition: transform 0.3s ease;
+        }
+
+        .controls.hidden {
+            transform: translateY(-100%);
+        }
+
+        .control-row {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .control-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .control-label {
+            font-weight: 600;
+            min-width: 80px;
+        }
+
+        .search-input {
+            flex: 1;
+            min-width: 300px;
+            padding: 10px 15px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 0.95em;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: #3498db;
+        }
+
+        .date-input {
+            padding: 10px 15px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #3498db;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #2980b9;
+        }
+
+        .sort-select {
+            padding: 10px 15px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            background: white;
+            cursor: pointer;
+        }
+
+        .stats-bar {
+            background: white;
+            padding: 15px 30px;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            gap: 30px;
+            flex-wrap: wrap;
+        }
+
+        .stat {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .stat-value {
+            font-weight: 700;
+            color: #3498db;
+            font-size: 1.1em;
+        }
+
+        .stat-label {
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        .loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .loading-content {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            text-align: center;
+            min-width: 300px;
+        }
+
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 30px;
+        }
+
+        .timeline {
+            position: relative;
+            padding-left: 40px;
+        }
+
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 15px;
+            top: 0;
+            bottom: 0;
+            width: 3px;
+            background: linear-gradient(180deg, #3498db 0%, #9b59b6 100%);
+        }
+
+        .timeline-event {
+            position: relative;
+            margin-bottom: 30px;
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: all 0.3s;
+            border-left: 4px solid #3498db;
+        }
+
+        .timeline-event:hover {
+            box-shadow: 0 8px 16px rgba(0,0,0,0.15);
+            transform: translateX(5px);
+        }
+
+        .timeline-event::before {
+            content: '';
+            position: absolute;
+            left: -31px;
+            top: 30px;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #3498db;
+            border: 4px solid white;
+            box-shadow: 0 0 0 2px #3498db;
+        }
+
+        .timeline-event.money::before {
+            background: #27ae60;
+            box-shadow: 0 0 0 2px #27ae60;
+        }
+
+        .timeline-event.money {
+            border-left-color: #27ae60;
+        }
+
+        .timeline-event.urgent::before {
+            background: #e74c3c;
+            box-shadow: 0 0 0 2px #e74c3c;
+        }
+
+        .timeline-event.urgent {
+            border-left-color: #e74c3c;
+        }
+
+        .event-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 15px;
+            gap: 15px;
+        }
+
+        .event-title {
+            font-size: 1.3em;
+            font-weight: 700;
+            color: #2c3e50;
+            flex: 1;
+        }
+
+        .event-date-range {
+            font-size: 0.85em;
+            color: #7f8c8d;
+            white-space: nowrap;
+        }
+
+        .event-meta {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .category-badge {
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+
+        .category-money {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .category-meeting {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .category-urgent {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .category-business {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .category-general {
+            background: #e2e3e5;
+            color: #383d41;
+        }
+
+        .event-summary {
+            color: #555;
+            line-height: 1.7;
+            margin-bottom: 15px;
+            font-size: 1.05em;
+        }
+
+        .show-messages-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.95em;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .show-messages-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .messages-container {
+            display: none;
+            margin-top: 20px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .messages-container.show {
+            display: block;
+            animation: slideDown 0.3s ease;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .messages-title {
+            font-weight: 700;
+            margin-bottom: 15px;
+            color: #2c3e50;
+            font-size: 1.1em;
+        }
+
+        .message-item {
+            padding: 15px;
+            margin-bottom: 12px;
+            background: white;
+            border-radius: 8px;
+            border-left: 3px solid #ddd;
+            transition: all 0.2s;
+        }
+
+        .message-item:hover {
+            border-left-color: #667eea;
+            transform: translateX(3px);
+        }
+
+        .message-header-info {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            font-size: 0.9em;
+        }
+
+        .message-from {
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .message-time {
+            color: #95a5a6;
+        }
+
+        .message-text {
+            color: #555;
+            line-height: 1.6;
+        }
+
+        .direction-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.75em;
+            margin-left: 8px;
+        }
+
+        .direction-from {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .direction-to {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .no-results {
+            text-align: center;
+            padding: 60px 20px;
+            color: #999;
+            font-size: 1.1em;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 15px;
+            }
+
+            .timeline {
+                padding-left: 25px;
+            }
+
+            .timeline::before {
+                left: 8px;
+            }
+
+            .timeline-event::before {
+                left: -24px;
+            }
+
+            .control-row {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .search-input {
+                min-width: auto;
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📱 BroFiles Timeline</h1>
+        <p class="header-subtitle">81,000+ messages organized into meaningful events</p>
+    </div>
+
+    <div class="controls" id="controls" style="display: none;">
+        <div class="control-row">
+            <span class="control-label">Search:</span>
+            <input type="text" class="search-input" id="searchInput" placeholder="Search all 81k messages..." onkeypress="if(event.key==='Enter') filterTimeline()">
+            <button class="btn btn-primary" onclick="filterTimeline()">Search</button>
+        </div>
+        <div class="control-row">
+            <span class="control-label">Date Range:</span>
+            <input type="date" class="date-input" id="startDate" onchange="filterTimeline()">
+            <span>to</span>
+            <input type="date" class="date-input" id="endDate" onchange="filterTimeline()">
+            <span class="control-label" style="margin-left: 20px;">Sort:</span>
+            <select class="sort-select" id="sortSelect" onchange="sortTimeline()">
+                <option value="importance">By Importance</option>
+                <option value="chronological">Chronological (Newest)</option>
+                <option value="oldest">Chronological (Oldest)</option>
+            </select>
+            <button class="btn btn-primary" onclick="clearFilters()">Clear All</button>
+        </div>
+    </div>
+
+    <div class="stats-bar" id="statsBar" style="display: none;">
+        <div class="stat">
+            <span class="stat-label">Total Messages:</span>
+            <span class="stat-value" id="totalMessages">0</span>
+        </div>
+        <div class="stat">
+            <span class="stat-label">Timeline Events:</span>
+            <span class="stat-value" id="totalEvents">0</span>
+        </div>
+        <div class="stat">
+            <span class="stat-label">Showing:</span>
+            <span class="stat-value" id="displayedCount">0</span>
+        </div>
+        <div class="stat">
+            <span class="stat-value" id="moneyCount">0</span>
+            <span class="stat-label">Financial</span>
+        </div>
+        <div class="stat">
+            <span class="stat-value" id="urgentCount">0</span>
+            <span class="stat-label">Urgent</span>
+        </div>
+    </div>
+
+    <div class="loading-screen" id="loadingScreen">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <h2 id="loadingTitle">Loading timeline...</h2>
+            <p id="loadingMessage">Processing data</p>
+        </div>
+    </div>
+
+    <div class="container">
+        <div id="timelineContainer"></div>
+    </div>
+
+    <script>
+        let allMessages = []; // All 81k messages
+        let allEvents = []; // Grouped events
+        let filteredEvents = []; // After search/filter
+        let lastScrollTop = 0;
+
+        window.onload = function() {
+            loadAndProcess();
+            setupScrollHandler();
+        };
+
+        function setupScrollHandler() {
+            let scrollTimeout;
+            window.addEventListener('scroll', function() {
+                clearTimeout(scrollTimeout);
+                scrollTimeout = setTimeout(function() {
+                    const currentScroll = window.pageYOffset || document.documentElement.scrollTop;
+                    const controls = document.getElementById('controls');
+                    
+                    if (currentScroll > lastScrollTop && currentScroll > 150) {
+                        controls.classList.add('hidden');
+                    } else {
+                        controls.classList.remove('hidden');
+                    }
+                    
+                    lastScrollTop = currentScroll <= 0 ? 0 : currentScroll;
+                }, 50);
+            });
+        }
+
+        function updateLoading(title, message) {
+            document.getElementById('loadingTitle').textContent = title;
+            document.getElementById('loadingMessage').textContent = message;
+        }
+
+        async function loadAndProcess() {
+            document.getElementById('loadingScreen').style.display = 'flex';
+            updateLoading('Loading data...', 'Fetching from GitHub');
+
+            try {
+                const url = 'https://raw.githubusercontent.com/tharutheebu/brofiles/refs/heads/main/timeline.json';
+                const response = await fetch(url);
+                if (!response.ok) throw new Error('Failed to load timeline');
+                
+                const allData = await response.json();
+                updateLoading('Processing...', `Loading ${allData.length.toLocaleString()} items`);
+                await sleep(100);
+                
+                // Keep only SMS Messages
+                allMessages = allData.filter(item => item.Type === 'SMS Messages');
+                
+                updateLoading('Analyzing...', `Processing ${allMessages.length.toLocaleString()} messages`);
+                await sleep(100);
+                
+                updateLoading('Grouping events...', 'Creating timeline events');
+                await sleep(100);
+                
+                allEvents = groupMessagesIntoEvents(allMessages);
+                filteredEvents = [...allEvents];
+                
+                document.getElementById('loadingScreen').style.display = 'none';
+                document.getElementById('controls').style.display = 'block';
+                document.getElementById('statsBar').style.display = 'flex';
+                
+                updateStats();
+                sortTimeline();
+                
+            } catch (error) {
+                document.getElementById('loadingScreen').style.display = 'none';
+                document.getElementById('timelineContainer').innerHTML = `
+                    <div class="no-results">
+                        <h2>Error Loading Timeline</h2>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        function groupMessagesIntoEvents(messages) {
+            // Analyze each message
+            const analyzed = messages.map((msg, index) => {
+                const desc = msg.Description && typeof msg.Description === 'string' ? msg.Description : '';
+                const text = desc.toLowerCase();
+                
+                return {
+                    ...msg,
+                    originalIndex: index,
+                    text: text,
+                    amounts: extractAmounts(desc),
+                    category: categorizeMessage(text),
+                    importance: calculateImportance(text, extractAmounts(desc)),
+                    normalizedAmounts: normalizeAmounts(desc)
+                };
+            });
+
+            const events = [];
+            const used = new Set();
+
+            // Group messages into events
+            analyzed.forEach((msg, idx) => {
+                if (used.has(idx)) return;
+                
+                const relatedMessages = [msg];
+                used.add(idx);
+
+                // Find related messages within 7 days
+                const msgTime = parseTimestamp(msg.Timestamp);
+                const sevenDays = 7 * 24 * 60 * 60 * 1000;
+
+                analyzed.forEach((other, otherIdx) => {
+                    if (used.has(otherIdx) || idx === otherIdx) return;
+
+                    const otherTime = parseTimestamp(other.Timestamp);
+                    const timeDiff = Math.abs(msgTime - otherTime);
+
+                    if (timeDiff < sevenDays) {
+                        // Check if related
+                        if (isRelated(msg, other)) {
+                            relatedMessages.push(other);
+                            used.add(otherIdx);
+                        }
+                    }
+                });
+
+                // Sort messages chronologically
+                relatedMessages.sort((a, b) => parseTimestamp(a.Timestamp) - parseTimestamp(b.Timestamp));
+
+                // Create event
+                const event = {
+                    id: `event-${events.length}`,
+                    messages: relatedMessages,
+                    category: determineEventCategory(relatedMessages),
+                    importance: Math.max(...relatedMessages.map(m => m.importance)),
+                    startDate: relatedMessages[0].Timestamp,
+                    endDate: relatedMessages[relatedMessages.length - 1].Timestamp,
+                    participants: [...new Set(relatedMessages.map(m => m.Party || 'Unknown'))],
+                    amounts: [...new Set(relatedMessages.flatMap(m => m.amounts))],
+                    summary: generateEventSummary(relatedMessages)
+                };
+
+                events.push(event);
+            });
+
+            return events;
+        }
+
+        function isRelated(msg1, msg2) {
+            // Same participant
+            if (msg1.Party === msg2.Party) return true;
+
+            // Same amounts mentioned
+            const amounts1 = msg1.normalizedAmounts;
+            const amounts2 = msg2.normalizedAmounts;
+            if (amounts1.some(a => amounts2.includes(a))) return true;
+
+            // Similar keywords
+            const keywords1 = extractKeywords(msg1.text);
+            const keywords2 = extractKeywords(msg2.text);
+            const commonKeywords = keywords1.filter(k => keywords2.includes(k));
+            if (commonKeywords.length >= 2) return true;
+
+            return false;
+        }
+
+        function extractKeywords(text) {
+            const keywords = [];
+            const patterns = [
+                /\b(payment|salary|budget|money|fund|loan|rent|project|contract|tender|deal|meeting|dinner|lunch|urgent|important)\b/g
+            ];
+            
+            patterns.forEach(pattern => {
+                const matches = text.match(pattern);
+                if (matches) keywords.push(...matches);
+            });
+
+            return keywords;
+        }
+
+        function normalizeAmounts(text) {
+            const amounts = extractAmounts(text);
+            return amounts.map(a => Math.floor(a / 1000) * 1000); // Round to nearest 1000
+        }
+
+        function extractAmounts(text) {
+            if (!text || typeof text !== 'string') return [];
+            const amounts = [];
+            
+            // Match: 900k, 900,000, 900000, etc
+            const patterns = [
+                /(\d+)k\b/gi,
+                /(\d{1,3}(?:,\d{3})+)/g,
+                /\b(\d{4,})\b/g
+            ];
+
+            patterns.forEach(pattern => {
+                const matches = text.match(pattern);
+                if (matches) {
+                    matches.forEach(match => {
+                        let num;
+                        if (match.toLowerCase().endsWith('k')) {
+                            num = parseFloat(match) * 1000;
+                        } else {
+                            num = parseFloat(match.replace(/,/g, ''));
+                        }
+                        if (num >= 100) amounts.push(num);
+                    });
+                }
+            });
+
+            return [...new Set(amounts)];
+        }
+
+        function categorizeMessage(text) {
+            if (/rufiya|rf|mvr|dollar|\$|payment|salary|budget|money|laari|lakka|fund|amount|pay|loan|rent/.test(text)) {
+                return 'money';
+            }
+            if (/urgent|asap|emergency|serious|important|critical|immediately|waiting/.test(text)) {
+                return 'urgent';
+            }
+            if (/meet|appointment|dinner|lunch|schedule|visit/.test(text)) {
+                return 'meeting';
+            }
+            if (/contract|deal|tender|project|business|minister|government|parliament/.test(text)) {
+                return 'business';
+            }
+            return 'general';
+        }
+
+        function calculateImportance(text, amounts) {
+            let score = 0;
+            
+            if (amounts.length > 0) {
+                score += 10 + Math.log10(Math.max(...amounts));
+            }
+            
+            if (/urgent|asap|emergency|critical/.test(text)) score += 8;
+            if (/minister|president|government/.test(text)) score += 6;
+            if (/contract|tender|deal/.test(text)) score += 5;
+            
+            return score;
+        }
+
+        function determineEventCategory(messages) {
+            const categories = messages.map(m => m.category);
+            if (categories.includes('money')) return 'money';
+            if (categories.includes('urgent')) return 'urgent';
+            if (categories.includes('meeting')) return 'meeting';
+            if (categories.includes('business')) return 'business';
+            return 'general';
+        }
+
+        function generateEventSummary(messages) {
+            const firstMsg = messages[0];
+            const amounts = [...new Set(messages.flatMap(m => m.amounts))];
+            const participants = [...new Set(messages.map(m => m.Party || 'Unknown'))].filter(p => p !== 'Unknown');
+            
+            let summary = '';
+            
+            if (amounts.length > 0) {
+                const total = amounts.reduce((a, b) => a + b, 0);
+                summary = `Financial: ${total.toLocaleString()} Rf`;
+                if (participants.length > 0) {
+                    summary += ` with ${participants.slice(0, 2).join(', ')}`;
+                }
+            } else {
+                const desc = firstMsg.Description && typeof firstMsg.Description === 'string' ? firstMsg.Description : 'Event';
+                summary = desc.substring(0, 100);
+                if (desc.length > 100) summary += '...';
+            }
+            
+            if (messages.length > 1) {
+                summary += ` (${messages.length} messages)`;
+            }
+            
+            return summary;
+        }
+
+        function parseTimestamp(timestamp) {
+            if (!timestamp) return 0;
+            try {
+                const [datePart, timePart] = timestamp.split(' ');
+                const [day, month, year] = datePart.split('/');
+                const [time] = timePart.split('(');
+                return new Date(`${year}-${month}-${day}T${time}Z`).getTime();
+            } catch (e) {
+                return 0;
+            }
+        }
+
+        function formatDate(timestamp) {
+            if (!timestamp) return 'N/A';
+            try {
+                const [datePart] = timestamp.split(' ');
+                return datePart || 'N/A';
+            } catch (e) {
+                return 'N/A';
+            }
+        }
+
+        function formatTime(timestamp) {
+            if (!timestamp) return '';
+            try {
+                const parts = timestamp.split(' ');
+                if (parts.length < 2) return '';
+                const [time] = parts[1].split('(');
+                return time;
+            } catch (e) {
+                return '';
+            }
+        }
+
+        function convertToDateInput(timestamp) {
+            if (!timestamp) return '1970-01-01';
+            try {
+                const [datePart] = timestamp.split(' ');
+                const [day, month, year] = datePart.split('/');
+                return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+            } catch (e) {
+                return '1970-01-01';
+            }
+        }
+
+        function sortTimeline() {
+            const sortBy = document.getElementById('sortSelect').value;
+            
+            if (sortBy === 'importance') {
+                filteredEvents.sort((a, b) => b.importance - a.importance);
+            } else if (sortBy === 'chronological') {
+                filteredEvents.sort((a, b) => parseTimestamp(b.startDate) - parseTimestamp(a.startDate));
+            } else if (sortBy === 'oldest') {
+                filteredEvents.sort((a, b) => parseTimestamp(a.startDate) - parseTimestamp(b.startDate));
+            }
+            
+            renderTimeline();
+        }
+
+        function filterTimeline() {
+            const search = document.getElementById('searchInput').value.toLowerCase();
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+            
+            filteredEvents = allEvents.filter(event => {
+                // Search across ALL messages in the event
+                const matchesSearch = !search || 
+                    event.summary.toLowerCase().includes(search) ||
+                    event.participants.some(p => p.toLowerCase().includes(search)) ||
+                    event.messages.some(m => {
+                        const desc = m.Description || '';
+                        return typeof desc === 'string' && desc.toLowerCase().includes(search);
+                    });
+                
+                const eventDate = convertToDateInput(event.startDate);
+                const matchesStart = !startDate || eventDate >= startDate;
+                const matchesEnd = !endDate || eventDate <= endDate;
+                
+                return matchesSearch && matchesStart && matchesEnd;
+            });
+            
+            updateStats();
+            sortTimeline();
+        }
+
+        function clearFilters() {
+            document.getElementById('searchInput').value = '';
+            document.getElementById('startDate').value = '';
+            document.getElementById('endDate').value = '';
+            filterTimeline();
+        }
+
+        function updateStats() {
+            document.getElementById('totalMessages').textContent = allMessages.length.toLocaleString();
+            document.getElementById('totalEvents').textContent = allEvents.length.toLocaleString();
+            document.getElementById('displayedCount').textContent = filteredEvents.length.toLocaleString();
+            document.getElementById('moneyCount').textContent = allEvents.filter(e => e.category === 'money').length;
+            document.getElementById('urgentCount').textContent = allEvents.filter(e => e.category === 'urgent').length;
+        }
+
+        function renderTimeline() {
+            const container = document.getElementById('timelineContainer');
+            
+            if (filteredEvents.length === 0) {
+                container.innerHTML = '<div class="no-results">No events found matching your filters</div>';
+                return;
+            }
+            
+            const html = `<div class="timeline">${filteredEvents.map((event, idx) => {
+                const dateRange = event.startDate === event.endDate ? 
+                    formatDate(event.startDate) : 
+                    `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`;
+                
+                return `
+                    <div class="timeline-event ${event.category}">
+                        <div class="event-header">
+                            <div class="event-title">${event.summary}</div>
+                            <div class="event-date-range">${dateRange}</div>
+                        </div>
+                        <div class="event-meta">
+                            <span class="category-badge category-${event.category}">${event.category}</span>
+                            <span>👥 ${event.participants.slice(0, 3).join(', ')}${event.participants.length > 3 ? '...' : ''}</span>
+                            ${event.amounts.length > 0 ? `<span>💰 ${event.amounts.map(a => a.toLocaleString()).join(', ')} Rf</span>` : ''}
+                            <span>💬 ${event.messages.length} message${event.messages.length > 1 ? 's' : ''}</span>
+                        </div>
+                        <button class="show-messages-btn" onclick="toggleMessages(${idx})">
+                            Show All Messages
+                        </button>
+                        <div class="messages-container" id="messages-${idx}">
+                            <div class="messages-title">📱 All Messages in This Event</div>
+                            ${event.messages.map(msg => {
+                                let directionBadge = '';
+                                if (msg.Direction === 'From') {
+                                    directionBadge = '<span class="direction-badge direction-from">Received</span>';
+                                } else if (msg.Direction === 'To') {
+                                    directionBadge = '<span class="direction-badge direction-to">Sent</span>';
+                                }
+                                
+                                return `
+                                    <div class="message-item">
+                                        <div class="message-header-info">
+                                            <span class="message-from">${msg.Party || 'Unknown'}${directionBadge}</span>
+                                            <span class="message-time">${formatDate(msg.Timestamp)} ${formatTime(msg.Timestamp)}</span>
+                                        </div>
+                                        <div class="message-text">${msg.Description || '(No message)'}</div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+                `;
+            }).join('')}</div>`;
+            
+            container.innerHTML = html;
+        }
+
+        function toggleMessages(idx) {
+            const element = document.getElementById(`messages-${idx}`);
+            element.classList.toggle('show');
+            
+            const btn = event.target;
+            if (element.classList.contains('show')) {
+                btn.textContent = 'Hide Messages';
+            } else {
+                btn.textContent = 'Show All Messages';
+            }
+        }
+
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+    </script>
+</body>
+</html>
